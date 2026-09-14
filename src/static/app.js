@@ -3,6 +3,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const loginButton = document.getElementById("login-button");
+  const logoutButton = document.getElementById("logout-button");
+  const loginDialog = document.getElementById("login-dialog");
+  const loginForm = document.getElementById("login-form");
+  const loginStatus = document.getElementById("login-status");
+  let authToken = localStorage.getItem("teacher-token");
+
+  function updateAuthControls(username = "") {
+    const loggedIn = Boolean(authToken);
+    signupForm.classList.toggle("hidden", !loggedIn);
+    loginButton.classList.toggle("hidden", loggedIn);
+    logoutButton.classList.toggle("hidden", !loggedIn);
+    loginStatus.textContent = loggedIn
+      ? `Logged in as ${username || "teacher"}.`
+      : "Log in as a teacher to register or unregister students.";
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -80,6 +96,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
 
@@ -124,6 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
 
@@ -155,6 +173,49 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  loginButton.addEventListener("click", () => loginDialog.showModal());
+
+  document.getElementById("cancel-login").addEventListener("click", () => {
+    loginDialog.close();
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const response = await fetch("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+
+    const result = await response.json();
+    if (!response.ok) {
+      messageDiv.textContent = result.detail || "Login failed";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      return;
+    }
+
+    authToken = result.token;
+    localStorage.setItem("teacher-token", authToken);
+    updateAuthControls(result.username);
+    loginForm.reset();
+    loginDialog.close();
+  });
+
+  logoutButton.addEventListener("click", async () => {
+    await fetch("/logout", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    authToken = null;
+    localStorage.removeItem("teacher-token");
+    updateAuthControls();
+  });
+
   // Initialize app
+  updateAuthControls();
   fetchActivities();
 });
